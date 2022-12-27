@@ -12,22 +12,27 @@ button {
 <br/>
 Code:<br/>
 <textarea id="code" style="width:800px;height:200px; resize:none;overflow:scroll">
+1000 ?=1000/50+20
 </textarea><br/>
-<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> <button id='sample'>Load Sample</button><br/>
+<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> Sample Program: <select id='sample'>
+    <option>Sum1to10</option>
+    <option>Hanoi</option>
+    <option>Factorial</option>
+    <option>Wave</option>
+</select><button id='load'>Load</button><br/>
 <br/>
 <hr/>
 Output:<br/>
 <textarea id="output" readonly tabindex="1" style="width:800px;height:200px; resize:none;overflow:scroll">
-
 </textarea>
-
+<br/>
 <button id="clear">Clear</button><br/>
 
 <script>
 
-sample = 
+sample = [
 '\
-100#===Sum 1 to 10==== \n\
+100#=== Sum 1 to 10 ==== \n\
 110 S=0\n\
 120 A=1,10\n\
 130 ?=A "  "\n\
@@ -35,7 +40,57 @@ sample =
 150 @=A+1\n\
 160 / "======"/\n\
 170 "SUM:" ?=S /\n\
+',
+'\
+1000#==== Hanoi ====\n\
+1010 / "Tower of Hanoi" /\n\
+1010 "Number of Disks ? " A=?\n\
+1020 B=$1000 C=0\n\
+1030 B(0)=A B(1)=$41 B(2)=$43 B(3)=$42\n\
+1040 !=2000\n\
+1050 #=-1\n\
+2000#==== Sub ====\n\
+2010 ;=B(C)=0 C=C-4 ]\n\
+2060 C=C+4\n\
+2020 B(C)=B(C-4)-1\n\
+2030 B(C+1)=B(C-3)\n\
+2040 B(C+2)=B(C-1)\n\
+2050 B(C+3)=B(C-2)\n\
+2060 !=2000\n\
+2070 "Move Disk " ?=B(C) " from " $=B(C+1) " to " $=B(C+2) /\n\
+2060 C=C+4\n\
+2020 B(C)=B(C-4)-1\n\
+2030 B(C+1)=B(C-1)\n\
+2040 B(C+2)=B(C-2)\n\
+2050 B(C+3)=B(C-3)\n\
+2080 !=2000\n\
+2020 C=C-4 ]\n\
+',
+'\
+100#====Factorial====\n\
+110 / "Calc Factorial" /\n\
+120 "Number ? " A=?\n\
+130 S=1\n\
+140 !=1000\n\
+150 ?=S\n\
+160 #=-1\n\
+1000 ;=A=0 ]\n\
+1000 S=S*A\n\
+1010 A=A-1\n\
+1020 !=1000\n\
+1030 ]\n\
+',
+'\
+1000#====Wave====\n\
+1010 X=1000\n\
+1020 V=0\n\
+1030 N=1,150\n\
+1040 X=X+V\n\
+1050 V=V-(X/10)\n\
+1060 .=X/50+25 "*" /\n\
+1070 @=N+1\n\
 '
+]
 ;
 
 let worker = new Worker('gameworker.js');
@@ -115,8 +170,8 @@ document.getElementById('stop').addEventListener('click', () => {
 document.getElementById('new').addEventListener('click', () => {
     document.getElementById('code').value = '';
 });
-document.getElementById('sample').addEventListener('click', () => {
-    document.getElementById('code').value = sample;
+document.getElementById('load').addEventListener('click', () => {
+    document.getElementById('code').value = sample[document.getElementById('sample').selectedIndex];
 });
 document.getElementById('clear').addEventListener('click', () => {
     document.getElementById('output').value = outStr = '';
@@ -144,7 +199,7 @@ worker.addEventListener('message', function (e) {
 }, false);
 
 onload = () => {
-    document.getElementById('code').value = sample;
+    document.getElementById('code').value = sample[0];
 }
 </script>
 </body>

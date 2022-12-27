@@ -14,18 +14,17 @@ let workMem = new Uint8Array(65536);
 function findLine(n) {
     for(let p = 0; p >= 0; p = skpLine(p)) {
         if(isNum(p)) {
-            dumpLine(p);
             p = lineNum(p);
             if(curLine >= n) {
                 if(code[p] != ' ')
-                    p = skpLine(p) + 1;
+                    p = skpLine(p);
                 return p;
             }
         }
     }
 }
 function dumpLine(p) {
-//    return;
+    return;
     let s = '';
     let p0 = p;
     while(code[p] >= ' ') {
@@ -221,71 +220,66 @@ async function evalEx(p) {
     p = await eval1(p);
     let v = value;
     for(;;) {
-        switch(code.substring(p, p + 2)) {
-        case '<=':
+        if(checkStr(p, '<=')) {
             p = await eval1(p + 2);
             value = (v <= value) ? 1 : 0;
-            break;
-        case '>=':
+        }
+        else if(checkStr(p, '>=')) {
             p = await eval1(p + 2);
             value = (v >= value) ? 1 : 0;
-            break;
-        case '<>':
+        }
+        else if(checkStr(p, '<>')) {
             p = await eval1(p + 2);
             value = (v != value) ? 1 : 0;
-            break;
-        default:
-            switch(code[p]) {
-            case '+':
-                p = await eval1(p + 1);
-                value = v + value;
-                break;
-            case '-':
-                p = await eval1(p + 1);
-                value = v - value;
-                break;
-            case '*':
-                p = await eval1(p + 1);
-                value = v * value;
-                break;
-            case '/':
-                p = await eval1(p + 1);
-                if(value == 0) {
-                    error('0 DIVIDE');
-                    return -1;
-                }
-                value2 = v % value;
-                value = (v - value2)/ value;
-                break;
-            case '=':
-                p = await eval1(p + 1);
-                value = (v == value) ? 1 : 0;
-                break;
-            case '<':
-                p = await eval1(p + 1);
-                value = (v < value) ? 1 : 0;
-                break;
-            case '>':
-                p = await eval1(p + 1);
-                value = (v > value) ? 1 : 0;
-                break;
-            case '&':
-                p = await eval1(p + 1);
-                value = v & value;
-                break;
-            case '.':
-                p = await eval1(p + 1);
-                value = v | value;
-                break;
-            case '!':
-                p = await eval1(p + 1);
-                value = v ^ value;
-                break;
-            default:
-                return p;
-            }
-            break;
         }
+        else if(checkStr(p,  '+')) {
+            p = await eval1(p + 1);
+            value = v + value;
+        }
+        else if(checkStr(p, '-')) {
+            p = await eval1(p + 1);
+            value = v - value;
+        }
+        else if(checkStr(p, '*')) {
+            p = await eval1(p + 1);
+            value = v * value;
+        }
+        else if(checkStr(p, '/')) {
+            p = await eval1(p + 1);
+            if(value == 0) {
+                error('0 DIVIDE');
+                return -1;
+            }
+            value2 = v % value;
+            value = (v - value2)/ value;
+        }
+        else if(checkStr(p, '=')) {
+            p = await eval1(p + 1);
+            value = (v == value) ? 1 : 0;
+        }
+        else if(checkStr(p, '<')) {
+            p = await eval1(p + 1);
+            value = (v < value) ? 1 : 0;
+        }
+        else if(checkStr(p, '>')) {
+            p = await eval1(p + 1);
+            value = (v > value) ? 1 : 0;
+        }
+        else if(checkStr(p, '&')) {
+            p = await eval1(p + 1);
+            value = v & value;
+        }
+        else if(checkStr(p, '.')) {
+            p = await eval1(p + 1);
+            value = v | value;
+        }
+        else if(checkStr(p, '!')) {
+            p = await eval1(p + 1);
+            value = v ^ value;
+        }
+        else
+            return p;
+        v = value;
     }
 }
 
