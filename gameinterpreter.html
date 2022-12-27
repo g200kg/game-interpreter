@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<body>
+<style>
+button {
+    width:120px;
+    height:30px;
+    margin:10px;
+}
+</style>
+<h1>Game Interpreter</h1>
+<br/>
+Code:<br/>
+<textarea id="code" style="width:800px;height:200px; resize:none;overflow:scroll">
+</textarea><br/>
+<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> <button id='sample'>Load Sample</button><br/>
+<br/>
+<hr/>
+Output:<br/>
+<textarea id="output" readonly tabindex="1" style="width:800px;height:200px; resize:none;overflow:scroll">
+
+</textarea>
+
+<button id="clear">Clear</button><br/>
+
+<script>
+
+sample = 
+'\
+100#===Sum 1 to 10==== \n\
+110 S=0\n\
+120 A=1,10\n\
+130 ?=A "  "\n\
+140 S=S+A\n\
+150 @=A+1\n\
+160 / "======"/\n\
+170 "SUM:" ?=S /\n\
+'
+;
+
+let worker = new Worker('gameworker.js');
+let outStr = '';
+let wait = '';
+let inputKey = 0;
+let inputStr = '';
+let inputValue = 0;
+
+function keyCode(ev) {
+    switch(ev.key) {
+    case 'Backspace': return 0x8;
+    case 'Tab': return 0x9;
+    case 'Enter': return 0xd;
+    case 'Insert': return 0x12;
+    case 'Escape': return 0x1b;
+    case 'ArrowRight': return 0x1c;
+    case 'ArrowLeft': return 0x1d;
+    case 'ArrowUp': return 0x1e;
+    case 'ArrowDown':return 0x1f;
+    case 'Delete': return 0x7f;
+    case 'Shift':
+    case 'Alt':
+    case 'Control': return 0;
+    }
+    if(ev.ctrlKey) {
+        if(ev.key >= 'A' && ev.key <= 'Z') {
+            return ev.key.charCodeAt(0) - 0x40;
+        }
+        if(ev.key >= 'a' && ev.key <= 'z') {
+            return ev.key.charCodeAt(0) - 0x60;
+        }
+        return 0;
+    }
+    return ev.key.charCodeAt(0);
+}
+document.getElementById('output').addEventListener('keydown', (ev)=> {
+    if(wait == '$') {
+        inputKey = keyCode(ev);
+        if(inputKey) {
+            outStr += ev.key;
+            document.getElementById("output").value = outStr;
+            worker.postMessage(['key', inputKey]);
+            wait = '';
+        }
+    }
+    if(wait == '?') {
+        if(ev.key >= '0' && ev.key <= '9') {
+            inputStr += ev.key;
+            document.getElementById("output").value = outStr + inputStr;
+            return;
+        }
+        switch(ev.key) {
+        case 'Backspace':
+            if(inputStr.length > 0) {
+                inputStr = inputStr.slice(0, -1);
+                document.getElementById("output").value = outStr + inputStr;
+            }
+            break;
+        case 'Enter':
+            outStr += inputStr + '\n';
+            document.getElementById("output").value = outStr;
+            inputValue = inputStr|0;
+            worker.postMessage(['key', inputValue]);
+            wait = '';
+            break;
+        }
+    }
+});
+document.getElementById('run').addEventListener('click', () => {
+    worker.postMessage(['code',document.getElementById('code').value]);
+    worker.postMessage(['run',document.getElementById('code').value]);
+});
+document.getElementById('stop').addEventListener('click', () => {
+    worker.postMessage(['stop']);
+});
+document.getElementById('new').addEventListener('click', () => {
+    document.getElementById('code').value = '';
+});
+document.getElementById('sample').addEventListener('click', () => {
+    document.getElementById('code').value = sample;
+});
+document.getElementById('clear').addEventListener('click', () => {
+    document.getElementById('output').value = outStr = '';
+});
+worker.addEventListener('message', function (e) {
+//    console.log(e);
+    switch(e.data[0]) {
+    case 'line':
+        break;
+    case 'error':
+        outStr += `ERROR ${e.data[1]} line:${e.data[2]}\n`;
+        document.getElementById("output").value = outStr;
+        break;
+    case 'wait':
+        inputKey = 0;
+        inputStr = '';
+        inputValue = 0;
+        wait = e.data[1];
+        break;
+    case 'output':
+        outStr += e.data[1];
+        document.getElementById("output").value = outStr;
+        break;
+    }
+}, false);
+
+onload = () => {
+    document.getElementById('code').value = sample;
+}
+</script>
+</body>
+</html>
