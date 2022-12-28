@@ -111,6 +111,11 @@ function sleep(msec) {
         p = synCheck(p, ')');
         return p;
     }
+    if(code[p] == '"') {
+        p = nextStr(p + 1);
+        value = value.charCodeAt(0);
+        return p;
+    }
     if(code[p] == '$' && (code[p + 1] <= ' '
              || code[p + 1] == undefined)) {            // INPUT char
         inputDone = 0;
@@ -185,35 +190,36 @@ function sleep(msec) {
         }
         return p;
     }
+    error('SYNTAX');
 }
-async function eval1(p) {
+function eval1(p) {
     switch(code[p]) {
     case '-':                               // Minus
-        p = await eval0(p + 1);
+        p = eval0(p + 1);
         value = -value;
         return p;
     case '+':                               // Absolute
-        p = await eval0(p + 1);
+        p = eval0(p + 1);
         if(value < 0)
             value = -value;
         return p;
     case '%':                               // Mod
-        p = await eval0(p + 1);
+        p = eval0(p + 1);
         value = value2;
         return p;
     case "'":                               // Random
-        p = await eval0(p + 1);
+        p = eval0(p + 1);
         value = ((Math.random() * value)|0) + 1;
         return p;
     case '#':                               // Not
-        p = await eval0(p + 1);
+        p = eval0(p + 1);
         if(value)
             value = 0;
         else
             value = 1;
         return p;
     default:
-        return await eval0(p);
+        return eval0(p);
     }
 }
 async function evalEx(p) {
