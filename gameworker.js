@@ -77,9 +77,12 @@ function checkStr(p, s) {
 }
 function readAd(ad) {
     const v = workMem[ad] + (workMem[ad + 1] << 8);
-    if(v & 0x8000)
-        return v - 0x10000;
-    return v;
+    return clip16(v);
+}
+function clip16(x) {
+    if(x & 0x8000)
+        return x|0xffff0000;
+    return x&0xffff;
 }
 function toStr(v, c, r) {
     switch(r) {
@@ -224,7 +227,7 @@ async function eval1(p) {
 }
 async function evalEx(p) {
     p = await eval1(p);
-    let v = value;
+    let v = value = clip16(value);
     for(;;) {
         if(checkStr(p, '<=')) {
             p = await eval1(p + 2);
@@ -284,7 +287,7 @@ async function evalEx(p) {
         }
         else
             return p;
-        v = value;
+        v = value = clip16(value);
     }
 }
 
