@@ -212,7 +212,7 @@ async function eval1(p) {
         return p;
     case "'":                               // Random
         p = await eval0(p + 1);
-        value = ((Math.random() * value)|0) + 1;
+        value = ((Math.random() * value)|0);
         return p;
     case '#':                               // Not
         p = await eval0(p + 1);
