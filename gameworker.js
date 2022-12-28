@@ -192,34 +192,34 @@ function sleep(msec) {
     }
     error('SYNTAX');
 }
-function eval1(p) {
+async function eval1(p) {
     switch(code[p]) {
     case '-':                               // Minus
-        p = eval0(p + 1);
+        p = await eval0(p + 1);
         value = -value;
         return p;
     case '+':                               // Absolute
-        p = eval0(p + 1);
+        p = await eval0(p + 1);
         if(value < 0)
             value = -value;
         return p;
     case '%':                               // Mod
-        p = eval0(p + 1);
+        p = await eval0(p + 1);
         value = value2;
         return p;
     case "'":                               // Random
-        p = eval0(p + 1);
+        p = await eval0(p + 1);
         value = ((Math.random() * value)|0) + 1;
         return p;
     case '#':                               // Not
-        p = eval0(p + 1);
+        p = await eval0(p + 1);
         if(value)
             value = 0;
         else
             value = 1;
         return p;
     default:
-        return eval0(p);
+        return await eval0(p);
     }
 }
 async function evalEx(p) {
@@ -254,7 +254,6 @@ async function evalEx(p) {
             p = await eval1(p + 1);
             if(value == 0) {
                 error('0 DIVIDE');
-                return -1;
             }
             value2 = v % value;
             value = (v - value2)/ value;
