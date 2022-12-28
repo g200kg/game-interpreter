@@ -198,24 +198,24 @@ function sleep(msec) {
 async function eval1(p) {
     switch(code[p]) {
     case '-':                               // Minus
-        p = await eval0(p + 1);
+        p = await eval1(p + 1);
         value = -value;
         return p;
     case '+':                               // Absolute
-        p = await eval0(p + 1);
+        p = await eval1(p + 1);
         if(value < 0)
             value = -value;
         return p;
     case '%':                               // Mod
-        p = await eval0(p + 1);
+        p = await eval1(p + 1);
         value = value2;
         return p;
     case "'":                               // Random
-        p = await eval0(p + 1);
+        p = await eval1(p + 1);
         value = ((Math.random() * value)|0);
         return p;
     case '#':                               // Not
-        p = await eval0(p + 1);
+        p = await eval1(p + 1);
         if(value)
             value = 0;
         else
