@@ -1,57 +1,70 @@
 
 let code ='';
 let curPtr = 0;
-let curLine = 0;
+let line = 0;
 let value = 0;
-let isRun = 0;
-let isWait = '';
-let inputKey = 0;
-let inputDone = 0;
 let loops = [];
 let stack = [];
 let workMem = new Uint8Array(65536);
 
+let sab;
+let sabStat;
+const ISRUN = 0;        // sabStat[ISRUN]
+const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
+const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
+const CURLINE = 3;      // sabStat[CURLINE]
+
+function checkStr(p, s) {
+    const l = s.length;
+    for(let i=0; i < l; ++i) {
+        if(code[p + i] != s[i])
+            return 0;
+    }
+    return 1;
+}
 function findLine(n) {
-    for(let p = 0; p >= 0; p = skpLine(p)) {
+    for(p = 0; p >= 0; p = skpLine(p)) {
         if(isNum(p)) {
-            p = lineNum(p);
-            if(curLine >= n) {
-                if(code[p] != ' ')
+            const pl = lineNum(p);
+            p = pl.p;
+            if(pl.l >= n) {
+                if(code[p] != 0x20)
                     p = skpLine(p);
-                return p;
+                return {p:p, l:n};
             }
         }
     }
+    return {p:-1, l:0};
 }
 function dumpLine(p) {
     return;
     let s = '';
     let p0 = p;
-    while(code[p] >= ' ') {
-        s += code[p++];
+    while(code[p] >= 0x20) {
+        s += String.fromCharCode(code[p++]);
     }
     console.log(">", p0, s);
 }
 function isNum(p) {
-    if(code[p] >= '0' && code[p] <= '9')
+    if(code[p] >= 0x30 && code[p] <= 0x39)
         return 1;
     return 0;
 }
 function skpSpc(p) {
-    while(code[p] <= ' ') {
+    while(code[p] <= 0x20) {
             ++p;
     }
     return p;
 }
 function skpName(p) {
-    while((code[p] >= 'A' && code[p] <= 'Z') || (code[p] >= '0' && code[p] <= '9')) {
+    while((code[p] >= 0x41 && code[p] <= 0x5a) || (code[p] >= 0x30 && code[p] <= 0x39)) {
         ++p;
     }
     return p;
 }
 function skpLine(p) {
     for(;;) {
-        if(code[p] == '\n') {
+        if(code[p] == 0x0a) {
             return p + 1;
         }
         ++p;
@@ -63,17 +76,15 @@ function synCheck(p, ch) {
     return error('SYNTAX');
 }
 function nextStr(p) {
+    value ='';
     const p0 = p;
-    while(code[p] >= ' ' && code[p] != '"')
+    while(code[p] >= 0x20 && code[p] != 0x22) {
+        value += String.fromCharCode(code[p]);
         ++p;
-    value = code.substring(p0, p);
-    return synCheck(p, '"');
-}
-function checkStr(p, s) {
-    if(code.substring(p, p+5).indexOf(s) == 0) {
-        return 1;
     }
-    return 0;
+    const view = code.subarray(p0, p);
+    value = new TextDecoder().decode(view);
+    return synCheck(p, 0x22);
 }
 function readAd(ad) {
     const v = workMem[ad] + (workMem[ad + 1] << 8);
@@ -94,12 +105,12 @@ function toStr(v, c, r) {
     }
 }
 function lineNum(p) {
-    curLine = 0;
+    let l = 0;
     while(isNum(p)) {
-        curLine = curLine * 10 + (code[p]|0);
+        l = l * 10 + (code[p] - 0x30);
         ++p;
     }
-    return p;
+    return {p:p, l:l};
 }
 function sleep(msec) {
     return new Promise(function(resolve) {
@@ -107,59 +118,49 @@ function sleep(msec) {
   
     })
  }
- async function eval0(p) {
+ function eval0(p) {
     value = 0;
-    if(code[p] == '(') {
-        p = await evalEx(p + 1);
-        p = synCheck(p, ')');
+    if(code[p] == 0x28) {
+        p = evalEx(p + 1);
+        p = synCheck(p, 0x29);
         return p;
     }
-    if(code[p] == '"') {
+    if(code[p] == 0x22) {                                   // "\"" String
         p = nextStr(p + 1);
         value = value.charCodeAt(0);
         return p;
     }
-    if(code[p] == '$' && (code[p + 1] <= ' '
-             || code[p + 1] == undefined)) {            // INPUT char
-        inputDone = 0;
-        isWait = '$';
-        self.postMessage(['wait', '$']);
-        for(;;) {
-            await sleep(100);
-            if(inputDone) {
-                value=inputKey;
-                isWait = '';
-                return p + 1;
-            }
-        }
+    if(code[p] == 0x24 && (code[p + 1] <= 0x20
+             || code[p + 1] == undefined)) {                // "$" INPUT char
+        sabStat[INPUTWAIT] = 1;                             // wait input
+        self.postMessage(['input', '$']);
+        while(sabStat[INPUTWAIT])
+                ;
+        value = sabStat[INPUTVALUE];
+        return p + 1;
     }
-    if(code[p] == '?') {                                // INPUT Number
-        inputDone = 0;
-        isWait = '?';
-        self.postMessage(['wait', '?']);
-        for(;;) {
-            await sleep(100);
-            if(inputDone) {
-                value=inputKey;
-                isWait = '';
-                return p + 1;
-            }
-        }
+    if(code[p] == 0x3f) {                                   // "?" INPUT Number
+        sabStat[INPUTWAIT] = 1;                             // wait input
+        self.postMessage(['input', '?']);
+        while(sabStat[INPUTWAIT])
+            ;
+        value=sabStat[INPUTVALUE];
+        return p + 1;
     }
-    if(code[p] >= 'A' && code[p] <= 'Z') {              // Variables
-        const cc = code.charCodeAt(p);
+    if(code[p] >= 0x41 && code[p] <= 0x5a) {                // "A-Z" Variables
+        const cc = code[p];
         p = skpName(p);
         let ad = (cc - 0x41) * 2;
         switch(code[p]) {
-        case ':':
-            p = await evalEx(p + 1);
-            p = synCheck(p, ')');
+        case 0x3a:                                          // ":"
+            p = evalEx(p + 1);
+            p = synCheck(p, 0x29);                          // ")"
             ad = workMem[ad] + (workMem[ad + 1] << 8) + value;
             value = workMem[ad];
             return p;
-        case '(':
-            p = await evalEx(p + 1);
-            p = synCheck(p, ')');
+        case 0x28:                                          // "("
+            p = evalEx(p + 1);
+            p = synCheck(p, 0x29);                          // ")"
             ad = workMem[ad] + (workMem[ad + 1] << 8) + value * 2;
             value = readAd(ad);
             return p;
@@ -168,10 +169,10 @@ function sleep(msec) {
             return p;
         }
     }
-    if(code[p] == '$') {                                // Hex Number
+    if(code[p] == 0x24) {                                   // Hex Number
         ++p;
         for(;;) {
-            const cc = code.charCodeAt(p);
+            const cc = code[p];
             if(cc >= 0x30 && cc <= 0x39)
                 value = value * 16 + cc - 0x30;
             else if(cc >= 0x41 && cc <= 0x46)
@@ -182,9 +183,9 @@ function sleep(msec) {
         }
         return p;
     }
-    if(code[p] >= '0' && code[p] <= '9') {              // Decimal Number
+    if(code[p] >= 0x30 && code[p] <= 0x39) {                // Decimal Number
         for(;;) {
-            const cc = code.charCodeAt(p);
+            const cc = code[p];
             if(cc >= 0x30 && cc <= 0x39)
                 value = value * 10 + cc - 0x30;
             else
@@ -195,94 +196,94 @@ function sleep(msec) {
     }
     error('SYNTAX');
 }
-async function eval1(p) {
+function eval1(p) {
     switch(code[p]) {
-    case '-':                               // Minus
-        p = await eval1(p + 1);
+    case 0x2d:                                              // "-" Minus
+        p = eval1(p + 1);
         value = -value;
         return p;
-    case '+':                               // Absolute
-        p = await eval1(p + 1);
+    case 0x2b:                                              // "+" Absolute
+        p = eval1(p + 1);
         if(value < 0)
             value = -value;
         return p;
-    case '%':                               // Mod
-        p = await eval1(p + 1);
+    case 0x25:                                              // "%" Mod
+        p = eval1(p + 1);
         value = value2;
         return p;
-    case "'":                               // Random
-        p = await eval1(p + 1);
+    case 0x27:                                              // "'" Random
+        p = eval1(p + 1);
         value = ((Math.random() * value)|0);
         return p;
-    case '#':                               // Not
-        p = await eval1(p + 1);
+    case 0x23:                                              // "#" Not
+        p = eval1(p + 1);
         if(value)
             value = 0;
         else
             value = 1;
         return p;
     default:
-        return await eval0(p);
+        return eval0(p);
     }
 }
-async function evalEx(p) {
-    p = await eval1(p);
+function evalEx(p) {
+    p = eval1(p);
     let v = value = clip16(value);
     for(;;) {
-        if(checkStr(p, '<=')) {
-            p = await eval1(p + 2);
+        if(checkStr(p, [0x3c, 0x3d])) {                     // "<="
+            p = eval1(p + 2);
             value = (v <= value) ? 1 : 0;
         }
-        else if(checkStr(p, '>=')) {
-            p = await eval1(p + 2);
+        else if(checkStr(p, [0x3e, 0x3d])) {                // ">="
+            p = eval1(p + 2);
             value = (v >= value) ? 1 : 0;
         }
-        else if(checkStr(p, '<>')) {
-            p = await eval1(p + 2);
+        else if(checkStr(p, [0x3c, 0x3e])) {                // "<>"
+            p = eval1(p + 2);
             value = (v != value) ? 1 : 0;
         }
-        else if(checkStr(p,  '+')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x2b) {                          // "+"
+            p = eval1(p + 1);
             value = v + value;
         }
-        else if(checkStr(p, '-')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x2d) {                          // "-"
+            p = eval1(p + 1);
             value = v - value;
         }
-        else if(checkStr(p, '*')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x2a) {                          // "*"
+            p = eval1(p + 1);
             value = v * value;
         }
-        else if(checkStr(p, '/')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x2f) {                          // "/"
+            p = eval1(p + 1);
             if(value == 0) {
                 error('0 DIVIDE');
             }
             value2 = v % value;
             value = (v - value2)/ value;
         }
-        else if(checkStr(p, '=')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x3d) {                          // "="
+            p = eval1(p + 1);
             value = (v == value) ? 1 : 0;
         }
-        else if(checkStr(p, '<')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x3c) {                          // "<"
+            p = eval1(p + 1);
             value = (v < value) ? 1 : 0;
         }
-        else if(checkStr(p, '>')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x3e) {                          // ">"
+            p = eval1(p + 1);
             value = (v > value) ? 1 : 0;
         }
-        else if(checkStr(p, '&')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x26) {                          // "&"
+            p = eval1(p + 1);
             value = v & value;
         }
-        else if(checkStr(p, '.')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x2e) {                          // "."
+            p = eval1(p + 1);
             value = v | value;
         }
-        else if(checkStr(p, '!')) {
-            p = await eval1(p + 1);
+        else if(code[p] == 0x21) {                          // "!"
+            p = eval1(p + 1);
             value = v ^ value;
         }
         else
@@ -291,87 +292,63 @@ async function evalEx(p) {
     }
 }
 
-async function statement(p) {
+function statement(p) {
     dumpLine(p);
     if(code[p] == undefined) {
-        isRun = 0;
         return -1;
     }
     p = skpSpc(p);
-    if(isNum(p)) {                              // LineNum
-        p = lineNum(p);
-        if(code[p] == ' ' || code[p] == '\t')
+    const ch = code[p];
+    if(isNum(p)) {                                          // LineNum
+        const pl = lineNum(p);
+        p = pl.p;
+        sabStat[CURLINE] = pl.l;
+        if(code[p] == 0x20 || code[p] == 0x09)
             return skpSpc(p);
         return skpLine(p);
     }
-    if(code[p] >= 'A' && code[p] <= 'Z') {      // LEFT value
-        const cc = code.charCodeAt(p);
+    if(ch >= 0x41 && ch <= 0x5a) {                          // "A-Z" LEFT value
+        const cc = code[p];
         let adr = (cc - 0x41) * 2;
         let bytes = 2;
         p = skpName(p);
         switch(code[p]) {
-        case ':':                               // LET 1Byte Array
-            p = await evalEx(p + 1);
-            p = synCheck(p, ')');
-            p = synCheck(p, '=');
+        case 0x3a:                                          // ":" LET 1Byte Array
+            p = evalEx(p + 1);
+            p = synCheck(p, 0x29);                          // ")"
+            p = synCheck(p, 0x3d);                          // "="
             adr = workMem[adr] + (workMem[adr + 1] << 8) + value;
             bytes = 1;
-            p = await evalEx(p);
+            p = evalEx(p);
             workMem[adr] = value & 0xff;
             break;
-        case '(':                               // LET 2Bytes Array
-            p = await evalEx(p + 1);
-            p = synCheck(p, ')');
-            p = synCheck(p, '=');
+        case 0x28:                                          // "(" LET 2Bytes Array
+            p = evalEx(p + 1);
+            p = synCheck(p, 0x29);                          // ")"
+            p = synCheck(p, 0x3d);                          // "="
             adr = workMem[adr] + (workMem[adr + 1] << 8) + value * 2;
-            p = await evalEx(p);
+            p = evalEx(p);
             workMem[adr] = value & 0xff;
             workMem[adr + 1] = (value >> 8); 
             break;
-        case '=':                               // LET Variables
-            p = await evalEx(p + 1);
+        case 0x3d:                                          // "=" LET Variables
+            p = evalEx(p + 1);
             workMem[adr] = value & 0xff;
             workMem[adr + 1] = (value >> 8);
             break;
         }
-        if(code[p] == ',') {                    // start FOR loop
-            p = await evalEx(p + 1);
-            loops.push({type:'F', a:adr, b:bytes, e:value, ptr:p, line:curLine});
+        if(code[p] == 0x2c) {                               // "," start FOR loop
+            p = evalEx(p + 1);
+            loops.push({type:'F', a:adr, b:bytes, e:value, ptr:p, line:sabStat[CURLINE]});
         }
         return p;
     }
-    if(checkStr(p, '#=')) {                     // GOTO
-        await evalEx(p + 2);
-        if(value < 0) {
-            isRun = 0;
-            return -1;
-        }
-        p = findLine(value);
-        return p;
-    }
-    if(checkStr(p, '!=')) {                     // GOSUB
-        p = await evalEx(p + 2);
-        if(value < 0)
-            return -1;
-        stack.push([p, curLine]);
-        p = findLine(value);
-        return p;
-    }
-    if(checkStr(p, ']')) {                      // RETURN
-        if(stack.length == 0) {
-            error('STACK');
-            return -1;
-        }
-        const p = stack.pop();
-        curLine = p[1];
-        return p[0];
-    }
-    if(checkStr(p, '@=')) {                     // FOR..NEXT / DO..UNTIL loop
+    if(checkStr(p, [0x40, 0x3d])) {                         // "@=" FOR..NEXT / DO..UNTIL loop
         if(loops.length > 0) {
-            p = await evalEx(p + 2);
+            p = evalEx(p + 2);
             const l = loops[loops.length - 1];
             switch(l.type) {
-            case 'F':                           // NEXT
+            case 'F':                                       // NEXT
                 workMem[l.a] = value;
                 if(l.b == 2)
                     workMem[l.a + 1] = value >> 8;
@@ -379,54 +356,91 @@ async function statement(p) {
                     loops.pop();
                     return p;
                 }
-                curLine = l.line;
+                sabStat[CURLINE] = l.line;
                 return skpSpc(l.ptr);
-            case 'D':                           // UNTIL
+            case 'D':                                       // UNTIL
                 if(value) {
                     loops.pop();
                     return p;
                 }
-                curLine = l.line;
+                sabStat[CURLINE] = l.line;
                 return skpSpc(l.ptr);
             }
         }
         return -1;
     }
-    if(checkStr(p, ';=')) {                     // IF
-        p = await evalEx(p + 2);
+    switch(ch) {
+    case 0x40:                                              // "@" start DO loop
+        p = skpSpc(p + 1);
+        loops.push({type:'D', ptr:p, line:sabStat[CURLINE]})
+        return p;
+    case 0x5d:                                              // "]" RETURN
+        if(stack.length == 0) {
+            error('STACK');
+            return -1;
+        }
+        const pp = stack.pop();
+        sabStat[CURLINE] = pp[1];
+        return pp[0];
+    case 0x2f:                                              // "/" PRINT LF
+        output('\n');
+        return p + 1;
+    case 0x22:                                              // "\"" PRINT string
+        p = nextStr(p + 1);
+        output(value);
+        return p;
+    }
+    if(checkStr(p, [0x23, 0x3d])) {                         // "#=" GOTO
+        evalEx(p + 2);
+        if(value < 0) {
+            isRun = 0;
+            return -1;
+        }
+        const pl = findLine(value);
+        p = pl.p;
+        sabStat[CURLINE] = pl.l;
+        return p;
+    }
+    if(checkStr(p, [0x21, 0x3d])) {                         // "!=" GOSUB
+        p = evalEx(p + 2);
+        if(value < 0)
+            return -1;
+        stack.push([p, sabStat[CURLINE]]);
+        const pl = findLine(value);
+        p = pl.p;
+        sabStat[CURLINE] = pl.l;
+        return p;
+    }
+    if(checkStr(p, [0x3b, 0x3d])) {                         // ";=" IF
+        p = evalEx(p + 2);
         if(value == 0) {
             p = skpLine(p);
         }
         return p;
     }
-    if(checkStr(p, '@')) {                      // start DO loop
-        p = skpSpc(p + 1);
-        loops.push({type:'D', ptr:p, line:curLine})
-        return p;
-    }
-    if(checkStr(p, '?$=')) {                    // PRINT HEX(2 colums)
-        p = await evalEx(p + 3);
+    if(checkStr(p, [0x3f, 0x24, 0x3d])) {                   // "?$=" PRINT HEX(2 colums)
+        p = evalEx(p + 3);
         const s = toStr(value & 0xff, 2, 16);
         output(s);
         return p;
     }
-    if(checkStr(p, '??=')) {                    // PRINT HEX(4 colums)
-        p = await evalEx(p + 3);
+    if(checkStr(p, [0x3f, 0x3f, 0x3d])) {                   // "??=" PRINT HEX(4 colums)
+        p = evalEx(p + 3);
         const s = toStr(value, 4, 16);
         output(s);
         return p;
     }
-    if(checkStr(p, '?=')) {                     // PRINT Decimal
-        p = await evalEx(p + 2);
+    if(checkStr(p, [0x3f, 0x3d])) {                         // "?=" PRINT Decimal
+        p = evalEx(p + 2);
         const s = value.toString();
         output(s);
         return p;
     }
-    if(checkStr(p, '?(')) {                     // PRINT Decimal(n colums)
-        p = await evalEx(p + 2);
+    if(checkStr(p, [0x3f, 0x28])) {                         // "?(" PRINT Decimal(n colums)
+        p = evalEx(p + 2);
         const c = value;
-        if(checkStr(p, ')=')) {
-            p = await evalEx(p + 2);
+        if(checkStr(p, [0x29, 0x3d])) {                     // ")="
+            p = evalEx(p + 2);
             const s = toStr(value, c, 10);
             output(s);
             return p;
@@ -434,30 +448,21 @@ async function statement(p) {
         error('SYNTAX');
         return -1;
     }
-    if(checkStr(p, '$=')) {                     // PRINT char
-        p = await evalEx(p + 2);
+    if(checkStr(p, [0x24, 0x3d])) {                         // "$=" PRINT char
+        p = evalEx(p + 2);
         output(String.fromCharCode(value));
         return p;
     }
-    if(checkStr(p, '.=')) {                     // PRINT space
-        p = await evalEx(p + 2);
+    if(checkStr(p, [0x2e, 0x3d])) {                         // ".=" PRINT space
+        p = evalEx(p + 2);
         output(' '.repeat(value & 0xff));
         return p;
     }
-    if(checkStr(p, '/')) {                      // PRINT LF
-        output('\n');
-        return p + 1;
-    }
-    if(checkStr(p, '"')) {                      // PRINT string
-        p = nextStr(p + 1);
-        output(value);
+    if(checkStr(p, [0x27, 0x3d])) {                         // "'=" Set Random Seed (Not implemented)
+        p = evalEx(p + 2);
         return p;
     }
-    if(checkStr(p, "'=")) {                     // Set Random Seed (Not implemented)
-        p = await evalEx(p + 2);
-        return p;
-    }
-    if(code[p] > ' ')
+    if(code[p] > 0x20)
         error('SYNTAX');
     return -1;
 }
@@ -466,23 +471,34 @@ function output(s) {
 }
 function error(p) {
     console.log("ERROR");
-    self.postMessage(['error', p, curLine]);
+    self.postMessage(['error', p, sabStat[CURLINE]]);
+    sabStat[ISRUN] = 0;
+}
+function statements() {
+    while(sabStat[ISRUN]) {
+        curPtr = statement(curPtr);
+        if(curPtr < 0)
+            sabStat[ISRUN] = 0;
+    }
 }
 self.addEventListener('message', (e) => {
+//    console.log(e)
     switch(e.data[0]) {
+    case 'init':
+        sab = e.data[1];
+        sabStat = new Int16Array(sab);
+        break;
     case 'code':
-        code = e.data[1];
+        code = new TextEncoder().encode(e.data[1]);
         curPtr = inputDone = 0;
         isWait = '';
-        isRun = 0;
+        sabStat[ISRUN] = 0;
         break;
     case 'run':
         curPtr = inputDone = 0;
         isWait = '';
-        isRun = 1;
-        break;
-    case 'stop':
-        isRun = 0;
+        sabStat[ISRUN] = 1;
+        statements();
         break;
     case 'key':
         inputKey = e.data[1];
@@ -490,8 +506,3 @@ self.addEventListener('message', (e) => {
         break;
     }
 });
-setInterval(async ()=>{
-    if(isRun && isWait == '' && curPtr >= 0) {
-        curPtr = await statement(curPtr);
-    }
-},5);

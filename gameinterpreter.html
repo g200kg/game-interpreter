@@ -2,10 +2,25 @@
 <html>
 <body>
 <style>
+html {
+    font-size: 14px;
+}
 button {
-    width:120px;
+    width:100px;
     height:30px;
     margin:10px;
+    background:#ccf;
+}
+button:hover {
+    background:#88f;
+    color:#fff;
+}
+button.run {
+    background:#f88;
+}
+button.run:hover {
+    background:#f88;
+    color:#000;
 }
 </style>
 <h1>Game Interpreter</h1>
@@ -13,13 +28,13 @@ GitHub : <a href="https://github.com/g200kg/game-interpreter">https://github.com
 <hr/><br/>
 Code:<br/>
 <textarea id="code" style="width:800px;height:200px; resize:none;overflow:scroll">
-1000 ?=1000/50+20
 </textarea><br/>
-<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> Sample Program: <select id='sample'>
+<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> CurLine <input id="line" style="width:50px" readonly/> Sample: <select id='sample'>
     <option>Sum1to10</option>
     <option>Hanoi</option>
     <option>Factorial</option>
     <option>Wave</option>
+    <option>LoopTest</option>
 </select><button id='load'>Load</button><br/>
 <br/>
 <hr/>
@@ -28,7 +43,7 @@ Output:<br/>
 </textarea>
 <br/>
 <button id="clear">Clear</button><br/>
-
+<script src="coi-serviceworker.js"></script>
 <script>
 
 sample = [
@@ -90,16 +105,34 @@ sample = [
 1050 V=V-(X/10)\n\
 1060 .=X/50+25 "*" /\n\
 1070 @=N+1\n\
+',
+'\
+100#====LoopTest====\n\
+110 I=0,10\n\
+120 ?=I\n\
+130 J=0,10000\n\
+140 K=0,1000\n\
+150 @=K+1\n\
+160 @=J+1\n\
+170 @=I+1\n\
 '
 ]
 ;
 
 let worker = new Worker('gameworker.js');
 let outStr = '';
-let wait = '';
 let inputKey = 0;
 let inputStr = '';
-let inputValue = 0;
+let wait = '';
+
+let sab = new SharedArrayBuffer(8);
+let sabStat = new Int16Array(sab);
+const ISRUN = 0;        // sabStat[ISRUN]
+const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
+const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
+const CURLINE = 3;      // sabStat[CURLINE]
+
+worker.postMessage(['init', sab]);
 
 function keyCode(ev) {
     switch(ev.key) {
@@ -134,8 +167,8 @@ document.getElementById('output').addEventListener('keydown', (ev)=> {
         if(inputKey) {
             outStr += ev.key;
             document.getElementById("output").value = outStr;
-            worker.postMessage(['key', inputKey]);
-            wait = '';
+            sabStat[INPUTVALUE] = inputKey;
+            sabStat[INPUTWAIT] = 0;
         }
     }
     if(wait == '?') {
@@ -154,19 +187,23 @@ document.getElementById('output').addEventListener('keydown', (ev)=> {
         case 'Enter':
             outStr += inputStr + '\n';
             document.getElementById("output").value = outStr;
-            inputValue = inputStr|0;
-            worker.postMessage(['key', inputValue]);
-            wait = '';
+            sabStat[INPUTVALUE] = inputStr | 0;
+            sabStat[INPUTWAIT] = 0;
             break;
         }
     }
 });
 document.getElementById('run').addEventListener('click', () => {
-    worker.postMessage(['code',document.getElementById('code').value]);
-    worker.postMessage(['run',document.getElementById('code').value]);
+    if(sabStat[ISRUN])
+        return;
+    worker.postMessage(['code', document.getElementById('code').value]);
+    worker.postMessage(['run']);
+    document.getElementById('run').classList.add("run");
 });
 document.getElementById('stop').addEventListener('click', () => {
-    worker.postMessage(['stop']);
+    sabStat[ISRUN] = 0;
+    sabStat[INPUTWAIT] = 0;
+    sabStat[INPUTVALUE] = 0;
 });
 document.getElementById('new').addEventListener('click', () => {
     document.getElementById('code').value = '';
@@ -178,18 +215,14 @@ document.getElementById('clear').addEventListener('click', () => {
     document.getElementById('output').value = outStr = '';
 });
 worker.addEventListener('message', function (e) {
-//    console.log(e);
     switch(e.data[0]) {
-    case 'line':
-        break;
     case 'error':
         outStr += `ERROR ${e.data[1]} line:${e.data[2]}\n`;
         document.getElementById("output").value = outStr;
         break;
-    case 'wait':
+    case 'input':
         inputKey = 0;
         inputStr = '';
-        inputValue = 0;
         wait = e.data[1];
         break;
     case 'output':
@@ -201,6 +234,14 @@ worker.addEventListener('message', function (e) {
 
 onload = () => {
     document.getElementById('code').value = sample[0];
+    setInterval(()=>{
+        if(sab) {
+            if(sabStat[ISRUN] == 0) {
+                document.getElementById('run').classList.remove('run');
+            }
+            document.getElementById('line').value = sabStat[CURLINE];
+        }
+    },100);
 }
 </script>
 </body>
