@@ -13,6 +13,7 @@ const ISRUN = 0;        // sabStat[ISRUN]
 const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
 const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
 const CURLINE = 3;      // sabStat[CURLINE]
+const TRACE = 4;        // sabStat[TRACE]
 
 function checkStr(p, s) {
     const l = s.length;
@@ -37,13 +38,17 @@ function findLine(n) {
     return {p:-1, l:0};
 }
 function dumpLine(p) {
-    return;
+    if(sabStat[TRACE] == 0)
+        return;
     let s = '';
     let p0 = p;
     while(code[p] >= 0x20) {
         s += String.fromCharCode(code[p++]);
     }
-    console.log(">", p0, s);
+    if(s[0] >= '0' && s[0] <= '9') {
+        console.log(s);
+        return;
+    }
 }
 function isNum(p) {
     if(code[p] >= 0x30 && code[p] <= 0x39)
@@ -120,9 +125,9 @@ function sleep(msec) {
  }
  function eval0(p) {
     value = 0;
-    if(code[p] == 0x28) {
+    if(code[p] == 0x28) {                                   // "("
         p = evalEx(p + 1);
-        p = synCheck(p, 0x29);
+        p = synCheck(p, 0x29);                              // ")"
         return p;
     }
     if(code[p] == 0x22) {                                   // "\"" String
@@ -130,8 +135,13 @@ function sleep(msec) {
         value = value.charCodeAt(0);
         return p;
     }
+    if(code[p] == 0x25 && (code[p + 1] <= 0x20
+            || code[p + 1] == undefined)) {
+        value = value2;
+        return p + 1;
+    }
     if(code[p] == 0x24 && (code[p + 1] <= 0x20
-             || code[p + 1] == undefined)) {                // "$" INPUT char
+            || code[p + 1] == undefined)) {                // "$" INPUT char
         sabStat[INPUTWAIT] = 1;                             // wait input
         self.postMessage(['input', '$']);
         while(sabStat[INPUTWAIT])
@@ -208,9 +218,12 @@ function eval1(p) {
             value = -value;
         return p;
     case 0x25:                                              // "%" Mod
-        p = eval1(p + 1);
-        value = value2;
-        return p;
+        if(code[p + 1] > 0x20) {
+            p = eval1(p + 1);
+            value = value2;
+            return p;
+        }
+        return eval0(p);
     case 0x27:                                              // "'" Random
         p = eval1(p + 1);
         value = ((Math.random() * value)|0);
@@ -293,11 +306,11 @@ function evalEx(p) {
 }
 
 function statement(p) {
-    dumpLine(p);
     if(code[p] == undefined) {
         return -1;
     }
     p = skpSpc(p);
+    dumpLine(p);
     const ch = code[p];
     if(isNum(p)) {                                          // LineNum
         const pl = lineNum(p);

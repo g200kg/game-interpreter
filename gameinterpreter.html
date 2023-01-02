@@ -5,11 +5,18 @@
 html {
     font-size: 14px;
 }
+label {
+    background:#ccf;
+    padding:3px 10px;
+    margin:10px;
+    border-radius: 10px;
+}
 button {
     width:100px;
     height:30px;
     margin:10px;
     background:#ccf;
+    border-radius: 10px;
 }
 button:hover {
     background:#88f;
@@ -27,9 +34,9 @@ button.run:hover {
 GitHub : <a href="https://github.com/g200kg/game-interpreter">https://github.com/g200kg/game-interpreter</a>
 <hr/><br/>
 Code:<br/>
-<textarea id="code" style="width:800px;height:200px; resize:none;overflow:scroll">
+<textarea id="code" style="width:800px;height:200px; overflow:scroll">
 </textarea><br/>
-<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> CurLine <input id="line" style="width:50px" readonly/> Sample: <select id='sample'>
+<button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> CurLine:<input id="line" style="width:50px" readonly/> <label><input id='trace' type="checkbox"/>Trace</label> Sample:<select id='sample'>
     <option>Sum1to10</option>
     <option>Hanoi</option>
     <option>Factorial</option>
@@ -39,7 +46,7 @@ Code:<br/>
 <br/>
 <hr/>
 Output:<br/>
-<textarea id="output" readonly tabindex="1" style="width:800px;height:200px; resize:none;overflow:scroll">
+<textarea id="output" readonly tabindex="1" style="width:800px;height:200px; overflow:scroll">
 </textarea>
 <br/>
 <button id="clear">Clear</button><br/>
@@ -125,12 +132,13 @@ let inputKey = 0;
 let inputStr = '';
 let wait = '';
 
-let sab = new SharedArrayBuffer(8);
+let sab = new SharedArrayBuffer(10);
 let sabStat = new Int16Array(sab);
 const ISRUN = 0;        // sabStat[ISRUN]
 const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
 const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
 const CURLINE = 3;      // sabStat[CURLINE]
+const TRACE = 4;        // sabStat[TRACE]
 
 worker.postMessage(['init', sab]);
 
@@ -214,10 +222,13 @@ document.getElementById('load').addEventListener('click', () => {
 document.getElementById('clear').addEventListener('click', () => {
     document.getElementById('output').value = outStr = '';
 });
+document.getElementById('trace').addEventListener('change', () => {
+    sabStat[TRACE] = document.getElementById('trace').checked ? 1 : 0;
+});
 worker.addEventListener('message', function (e) {
     switch(e.data[0]) {
     case 'error':
-        outStr += `ERROR ${e.data[1]} line:${e.data[2]}\n`;
+        outStr += `\n\nERROR ${e.data[1]} line:${e.data[2]}\n`;
         document.getElementById("output").value = outStr;
         break;
     case 'input':
