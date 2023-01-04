@@ -14,6 +14,7 @@ const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
 const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
 const CURLINE = 3;      // sabStat[CURLINE]
 const TRACE = 4;        // sabStat[TRACE]
+const OUTQUE = 5;       // sabStat[OUTQUE]
 
 function checkStr(p, s) {
     const l = s.length;
@@ -24,13 +25,13 @@ function checkStr(p, s) {
     return 1;
 }
 function findLine(n) {
-    for(p = 0; p >= 0; p = skpLine(p)) {
+    for(p = 0; p >= 0; p = skpSpc(skpLine(p))) {
         if(isNum(p)) {
             const pl = lineNum(p);
             p = pl.p;
             if(pl.l >= n) {
                 if(code[p] != 0x20)
-                    p = skpLine(p);
+                    p = skpSpc(skpLine(p));
                 return {p:p, l:n};
             }
         }
@@ -43,10 +44,12 @@ function dumpLine(p) {
     let s = '';
     let p0 = p;
     while(code[p] >= 0x20) {
-        s += String.fromCharCode(code[p++]);
+        ++p;
     }
-    if(s[0] >= '0' && s[0] <= '9') {
-        console.log(s);
+    if(code[p0] >= 0x30 && code[p0] <= 0x39) {
+        const l = code.subarray(p0, p);
+        const str = new TextDecoder().decode(l);
+        console.log(str);
         return;
     }
 }
@@ -141,7 +144,7 @@ function sleep(msec) {
         return p + 1;
     }
     if(code[p] == 0x24 && (code[p + 1] <= 0x20
-            || code[p + 1] == undefined)) {                // "$" INPUT char
+            || code[p + 1] == undefined)) {                 // "$" INPUT char
         sabStat[INPUTWAIT] = 1;                             // wait input
         self.postMessage(['input', '$']);
         while(sabStat[INPUTWAIT])
@@ -291,7 +294,7 @@ function evalEx(p) {
             p = eval1(p + 1);
             value = v & value;
         }
-        else if(code[p] == 0x2e) {                          // "."
+        else if(code[p] == 0x2e || code[p] == 0x7c) {       // "." "|"
             p = eval1(p + 1);
             value = v | value;
         }
@@ -480,6 +483,9 @@ function statement(p) {
     return -1;
 }
 function output(s) {
+    while(sabStat[OUTQUE] > 100)
+        ;
+    Atomics.add(sabStat, OUTQUE, 1);
     self.postMessage(['output', s]);
 }
 function error(p) {

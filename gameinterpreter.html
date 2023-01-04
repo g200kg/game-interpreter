@@ -3,7 +3,30 @@
 <body>
 <style>
 html {
-    font-size: 14px;
+    font-size: 11px;
+    margin:0;
+    padding:0;
+}
+body {
+    margin:0;
+    padding:0;
+}
+#header {
+    background:#ccf;
+    margin:0px 0px 8px 0px;
+    padding:0;
+}
+#main {
+    margin:0px 20px;
+}
+h1 {
+    margin:0px 20px;
+    color:#338;
+}
+#link {
+    position: absolute;
+    right:20px;
+    top:0px;
 }
 label {
     background:#ccf;
@@ -12,9 +35,9 @@ label {
     border-radius: 10px;
 }
 button {
-    width:100px;
-    height:30px;
-    margin:10px;
+    width:70px;
+    height:25px;
+    margin:5px 5px;
     background:#ccf;
     border-radius: 10px;
 }
@@ -30,11 +53,13 @@ button.run:hover {
     color:#000;
 }
 </style>
+<div id="header">
 <h1>Game Interpreter</h1>
-GitHub : <a href="https://github.com/g200kg/game-interpreter">https://github.com/g200kg/game-interpreter</a>
-<hr/><br/>
+<div id="link"> GitHub : <a href="https://github.com/g200kg/game-interpreter">https://github.com/g200kg/game-interpreter</a></div>
+</div>
+<div id="main">
 Code:<br/>
-<textarea id="code" style="width:800px;height:200px; overflow:scroll">
+<textarea id="code" cols="80" rows="15" style="overflow-y:scroll;overflow-x: hidden;">
 </textarea><br/>
 <button id='run'>Run</button> <button id='stop'>Stop</button> <button id='new'>New</button> CurLine:<input id="line" style="width:50px" readonly/> <label><input id='trace' type="checkbox"/>Trace</label> Sample:<select id='sample'>
     <option>Sum1to10</option>
@@ -42,14 +67,16 @@ Code:<br/>
     <option>Factorial</option>
     <option>Wave</option>
     <option>LoopTest</option>
-</select><button id='load'>Load</button><br/>
+    <option>LifeGame</option>
+</select><button id='load'>Load</button>
 <br/>
 <hr/>
 Output:<br/>
-<textarea id="output" readonly tabindex="1" style="width:800px;height:200px; overflow:scroll">
+<textarea id="output" readonly tabindex="1" cols="80" rows="25" style="overflow:scroll">
 </textarea>
 <br/>
 <button id="clear">Clear</button><br/>
+</div>
 <script src="coi-serviceworker.js"></script>
 <script>
 
@@ -122,25 +149,204 @@ sample = [
 150 @=K+1\n\
 160 @=J+1\n\
 170 @=I+1\n\
-'
+',
+'\
+1000#====LifeGame Test====\n\
+1010 $=$1B "[2JLifeGame" /\n\
+1020 A=$1000 B=$1800\n\
+1030 G=1\n\
+1040 Y=0,23 X=0,40\n\
+1050   A:Y*40+X)=0 B:Y*40+X)=0\n\
+1060 @=X+1 @=Y+1\n\
+1070 Y=1,22 X=1,39\n\
+1080   ;=\'8=0 A:Y*40+X)=1\n\
+1090 @=X+1 @=Y+1\n\
+1100 W=1,1000\n\
+1110   !=4000\n\
+1120   C=A A=B B=C\n\
+1130   !=2000\n\
+1140 @=W+1\n\
+1150 #=-1\n\
+2000#NEXT\n\
+2010 G=G+1\n\
+2020 Y=1,22 X=1,39\n\
+2030   A:Y*40+X)=B:Y*40+X)\n\
+2040   !=3000\n\
+2050   ;=C<2  A:Y*40+X)=0\n\
+2060   ;=C=3  A:Y*40+X)=1\n\
+2070   ;=C>3  A:Y*40+X)=0\n\
+2080 @=X+1 @=Y+1 ]\n\
+3000#CHECK\n\
+3010 C=0\n\
+3010 U=-1,1 V=-1,1\n\
+3020   C=C+B:Y+U*40+X+V)\n\
+3030 @=V+1 @=U+1\n\
+3040 C=C-B:Y*40+X) ]\n\
+4000#DISP\n\
+4010 $=$1B "[1;1H" $=$1B "[10C"\n\
+4020 ?=G /\n\
+4030 Y=1,22 X=1,39\n\
+4040   S="."\n\
+4050   ;=A:Y*40+X) S="*"\n\
+4060   $=S\n\
+4070 @=X+1 / @=Y+1 ]\n'
 ]
 ;
 
-let worker = new Worker('gameworker.js');
+let worker;
+let term;
+
 let outStr = '';
 let inputKey = 0;
 let inputStr = '';
 let wait = '';
+let blinker = 0;
 
-let sab = new SharedArrayBuffer(10);
+let sab = new SharedArrayBuffer(12);
 let sabStat = new Int16Array(sab);
 const ISRUN = 0;        // sabStat[ISRUN]
 const INPUTWAIT = 1;    // sabStat[INPUTWAIT]
 const INPUTVALUE = 2;   // sabStat[INPUTVALUE]
 const CURLINE = 3;      // sabStat[CURLINE]
 const TRACE = 4;        // sabStat[TRACE]
+const OUTQUE = 5;       // sabStat[OUTQUE]
 
-worker.postMessage(['init', sab]);
+sabStat[ISRUN] = 0;
+sabStat[INPUTWAIT] = 0;
+sabStat[CURLINE] = 0;
+sabStat[TRACE] = 0;
+sabStat[OUTQUE] = 0;
+
+class Term {
+    constructor(){
+        this.strRow = [];
+        this.maxX = 80;
+        this.maxY = 100;
+        this.Height = 25;
+        this.esc = 0;
+        for(let i = 0; i < this.maxY; ++i) {
+            this.strRow[i] = [];
+            for(let j = 0; j < this.maxX; ++j)
+                this.strRow[i].push(' ');
+        }
+        this.x = 0;
+        this.y = this.maxY - this.Height;
+        this.el = document.getElementById('output');
+        this.update();
+        this.el.scrollTop = this.el.scrollHeight;
+        this.decoder = new TextDecoder();
+    }
+    update() {
+        let row = [];
+        for(let i = 0; i < this.maxY; ++i) {
+            row.push(this.strRow[i].join(''));
+        }
+        const s = row.join('\n');
+        this.el.value = s;
+    }
+    output(s) {
+        for(let i = 0; i < s.length; ++i) {
+            if(this.esc.length) {
+                if((s[i] >= 'A' && s[i] <='Z') || (s[i] >= 'a' && s[i] <= 'z')) {
+                    let p1 = parseInt(this.esc.substring(this.esc.indexOf('[') + 1));
+                    let p2 = parseInt(this.esc.substring(this.esc.indexOf(';') + 1));
+                    switch(s[i]) {
+                    case 'A':
+                        if(isNaN(p1)) p1 = 1;
+                        this.y -= p1;
+                        if(this.y < this.maxY - this.Height)
+                            this.y = this.maxY - this.Height;
+                        break;
+                    case 'B':
+                        if(isNaN(p1)) p1 = 1;
+                        this.y += p1;
+                        if(this.y >= this.maxY)
+                            this.y = this.maxY - 1;
+                        break;
+                    case 'C':
+                        if(isNaN(p1)) p1 = 1;
+                        this.x += p1;
+                        if(this.x >= this.maxX)
+                            this.x = this.maxX - 1;
+                        break;
+                    case 'D':
+                        if(isNaN(p1)) p1 = 1;
+                        this.x -= p1;
+                        if(this.x < 0)
+                            this.x = 0;
+                        break;
+                    case 'H':
+                    case 'f':
+                        if(isNaN(p1)) p1 = 1;
+                        if(isNaN(p2)) p2 = 1;
+                        this.x = p1 - 1;
+                        this.y = this.maxY - this.Height + p2 - 1;
+                        break;
+                    case 'J':
+                    case 'K':
+                        if(isNaN(p1)) p1 = 0;
+                        switch(p1) {
+                        case 0:
+                            for(let i=this.x; i < this.maxX; ++i)
+                                this.strRow[this.maxY - this.Height][i] = ' ';
+                            break;
+                        case 1:
+                            for(let i=0; i < this.x; ++i)
+                                this.strRow[this.maxY - this.Height][i] = ' ';
+                            break;
+                        case 2:
+                            if(s[i] == 'J') {
+                                for(let i = this.maxY - this.Height; i < this.maxY; ++i)
+                                    this.strRow[i].fill(' ');
+                                this.y = this.maxY - this.Height;
+                                this.x = 0;
+                            }
+                            else {
+                                for(let i=0; i<this.maxX; ++i)
+                                    this.strRow[this.maxY - this.Height][i] = ' ';          
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                    this.esc = '';
+                }
+                else {
+                    this.esc += s[i];
+                }
+                continue;
+            }
+            switch(s[i]) {
+            case '\x1b':
+                this.esc = '\x1b';
+                break;
+            case '\b':
+                if(this.x > 0) {
+                    this.strRow[this.y][this.x] = ' ';
+                    --this.x;
+                }
+                break;
+            case '\n':
+                this.x = 0;
+                if(++this.y >= this.maxY) {
+                    --this.y;
+                    this.strRow.shift();
+                    this.strRow[this.y] = [];
+                    for(let j = 0; j < this.maxX; ++j)
+                        this.strRow[this.y][j] = ' ';
+                }
+                break;
+            default:
+                if(s[i] >= ' ') {
+                    this.strRow[this.y][this.x++] = s[i];
+                }
+                break;
+            }
+        }
+        this.update();
+        this.el.scrollTop = this.el.scrollHeight;
+    }
+}
 
 function keyCode(ev) {
     switch(ev.key) {
@@ -173,28 +379,26 @@ document.getElementById('output').addEventListener('keydown', (ev)=> {
     if(wait == '$') {
         inputKey = keyCode(ev);
         if(inputKey) {
-            outStr += ev.key;
-            document.getElementById("output").value = outStr;
+            term.output(ev.key);
             sabStat[INPUTVALUE] = inputKey;
             sabStat[INPUTWAIT] = 0;
         }
     }
     if(wait == '?') {
         if(ev.key >= '0' && ev.key <= '9') {
+            term.output(ev.key);
             inputStr += ev.key;
-            document.getElementById("output").value = outStr + inputStr;
             return;
         }
         switch(ev.key) {
         case 'Backspace':
             if(inputStr.length > 0) {
                 inputStr = inputStr.slice(0, -1);
-                document.getElementById("output").value = outStr + inputStr;
+                term.output('\b');
             }
             break;
         case 'Enter':
-            outStr += inputStr + '\n';
-            document.getElementById("output").value = outStr;
+            term.output('\n');
             sabStat[INPUTVALUE] = inputStr | 0;
             sabStat[INPUTWAIT] = 0;
             break;
@@ -220,30 +424,39 @@ document.getElementById('load').addEventListener('click', () => {
     document.getElementById('code').value = sample[document.getElementById('sample').selectedIndex];
 });
 document.getElementById('clear').addEventListener('click', () => {
-    document.getElementById('output').value = outStr = '';
+    term.output('\x1b[2J');
+//    document.getElementById('output').value = outStr = '';
 });
 document.getElementById('trace').addEventListener('change', () => {
     sabStat[TRACE] = document.getElementById('trace').checked ? 1 : 0;
 });
-worker.addEventListener('message', function (e) {
-    switch(e.data[0]) {
-    case 'error':
-        outStr += `\n\nERROR ${e.data[1]} line:${e.data[2]}\n`;
-        document.getElementById("output").value = outStr;
-        break;
-    case 'input':
-        inputKey = 0;
-        inputStr = '';
-        wait = e.data[1];
-        break;
-    case 'output':
-        outStr += e.data[1];
-        document.getElementById("output").value = outStr;
-        break;
-    }
-}, false);
+
+function init() {
+    term = new Term();
+    worker = new Worker('gameworker.js');
+    worker.postMessage(['init', sab]);
+    worker.addEventListener('message', function (e) {
+        switch(e.data[0]) {
+        case 'error':
+            term.output(`\nERROR ${e.data[1]} line:${e.data[2]}\n`);
+//            outStr += `\n\nERROR ${e.data[1]} line:${e.data[2]}\n`;
+//            document.getElementById("output").value = outStr;
+            break;
+        case 'input':
+            inputKey = 0;
+            inputStr = '';
+            wait = e.data[1];
+            break;
+        case 'output':
+            term.output(e.data[1]);
+            Atomics.sub(sabStat, OUTQUE, 1);
+            break;
+        }
+    }, false);
+}
 
 onload = () => {
+    init();
     document.getElementById('code').value = sample[0];
     setInterval(()=>{
         if(sab) {
@@ -252,7 +465,7 @@ onload = () => {
             }
             document.getElementById('line').value = sabStat[CURLINE];
         }
-    },100);
+    },200);
 }
 </script>
 </body>
