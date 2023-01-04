@@ -236,6 +236,11 @@ class Term {
         this.el.scrollTop = this.el.scrollHeight;
         this.decoder = new TextDecoder();
     }
+    clip(x,min,max){
+        if(x<min) return min;
+        if(x>max) return max;
+        return x;
+    }
     update() {
         let row = [];
         for(let i = 0; i < this.maxY; ++i) {
@@ -279,6 +284,8 @@ class Term {
                     case 'f':
                         if(isNaN(p1)) p1 = 1;
                         if(isNaN(p2)) p2 = 1;
+                        p1 = this.clip(p1, 1, 40);
+                        p2 = this.clip(p2, 1, this.Height);
                         this.x = p1 - 1;
                         this.y = this.maxY - this.Height + p2 - 1;
                         break;
